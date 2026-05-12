@@ -1,9 +1,12 @@
 # Originn Level 1 Screener
 
 A KG-backed first-screen filter for the **Originn startup portal**. Takes a
-seven-field Step 1 form (optionally with an uploaded deck), builds a typed
+seven-field Step 1 form **and an uploaded pitch deck**, builds a typed
 knowledge graph of the submission, and returns a triage label — **pass /
 review / reject** — plus a 0–100 composite score across five dimensions.
+
+The pitch deck is **required** — the Originn portal does not accept a
+form-only Level 1 submission.
 
 Designed for the top of the funnel: even ideation-stage ventures with no
 product, no revenue, and no traction can submit. The scoring rubric does
@@ -27,7 +30,7 @@ Thresholds are env-configurable.
 ## How it works
 
 ```
-form + (optional) deck text
+form + deck text (both required)
    └─► [LLM extract — gpt-4o-mini] → typed ExtractedFacts (JSON)
           └─► SubmissionKG (networkx)
                  └─► deterministic scoring (no LLM)
@@ -64,19 +67,20 @@ curl -X POST http://localhost:8000/screen \
   -F "stage=Idea" \
   -F "why_solve_this=Voice LLMs are finally good enough to argue back in real time." \
   -F 'founders_json=[{"name":"Aarav Mehta","role":"CEO","credential_one_line":"IIT Bombay Speech Lab alum"}]' \
-  -F "file=@deck.pptx"     # optional
+  -F "file=@deck.pptx"     # required
 ```
 
 Returns `{"job_id": "...", "status": "queued", ...}`. Poll
 `GET /jobs/{job_id}` for the result.
 
-Supported deck formats: `.pptx`, `.pdf`, `.md`, `.txt`.
+Supported deck formats: `.pptx`, `.pdf`, `.md`, `.txt`. Submissions
+without a deck return `422 Unprocessable Entity`.
 
 ## API
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /screen` | Submit form (+ optional deck) — returns `job_id` (202) |
+| `POST /screen` | Submit form + deck (both required) — returns `job_id` (202) |
 | `GET /jobs/{id}` | Poll status; includes full result when `status=done` |
 | `GET /jobs` | List recent jobs |
 | `GET /screenings` | List screening results (filter by name / triage / score) |
@@ -107,7 +111,7 @@ form = Level1Form(
     ],
 )
 
-# Optional: attach a deck
+# Deck is required — load it via deck_loader
 with open("deck.pptx", "rb") as f:
     deck_text = load_deck("deck.pptx", f.read())
 

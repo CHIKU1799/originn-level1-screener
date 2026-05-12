@@ -34,13 +34,12 @@ logger = logging.getLogger(__name__)
 # Internal pieces
 # ─────────────────────────────────────────────
 
-async def _extract(form: Level1Form, deck_text: str | None) -> ExtractedFacts:
-    user_payload = "=== STEP 1 FORM ===\n" + form.to_text()
-    if deck_text:
-        # Keep deck context bounded for predictable Level 1 cost
-        user_payload += f"\n\n=== ATTACHED DECK ===\n{deck_text[:9000]}"
-    else:
-        user_payload += "\n\n=== ATTACHED DECK ===\n(none — form only)"
+async def _extract(form: Level1Form, deck_text: str) -> ExtractedFacts:
+    user_payload = (
+        "=== STEP 1 FORM ===\n"
+        + form.to_text()
+        + f"\n\n=== ATTACHED DECK ===\n{deck_text[:9000]}"
+    )
 
     response = await rate_limited_create(
         model=config.EXTRACTION_MODEL,
@@ -125,7 +124,7 @@ class Level1AgentResult:
     narrative: Narrative
 
 
-async def run_level1(form: Level1Form, deck_text: str | None) -> Level1AgentResult:
+async def run_level1(form: Level1Form, deck_text: str) -> Level1AgentResult:
     facts = await _extract(form, deck_text)
 
     kg = SubmissionKG(form.startup_name)

@@ -68,7 +68,7 @@ app.add_middleware(
 # ─────────────────────────────────────────────
 
 @app.post("/screen", status_code=202,
-          summary="Submit Step 1 form (+ optional deck) for Level 1 screening")
+          summary="Submit Step 1 form + deck for Level 1 screening")
 async def screen(
     startup_name:           str = Form(...),
     industry_vertical:      str = Form(...),
@@ -83,12 +83,17 @@ async def screen(
             '[{"name": "Ada Lovelace", "credential_one_line": "...", "role": "..."}]'
         ),
     ),
-    file:                   Optional[UploadFile] = File(None),
+    file:                   UploadFile = File(
+        ...,
+        description="Pitch deck — required. .pptx / .pdf / .md / .txt.",
+    ),
 ):
     """
-    Multipart submission. `founders_json` is a JSON string because HTML
-    forms don't natively encode arrays of objects. Optional file upload
-    (.pptx / .pdf / .md / .txt) attaches the deck.
+    Multipart submission. The pitch deck is REQUIRED on the Originn portal;
+    the form alone is not sufficient for Level 1 screening.
+
+    `founders_json` is a JSON string because HTML forms don't natively
+    encode arrays of objects.
     """
     # Parse founders
     try:
@@ -116,15 +121,15 @@ async def screen(
         founders=founders,
     )
 
-    deck_text: Optional[str] = None
-    if file is not None:
-        content = await file.read()
-        try:
-            deck_text = load_deck(file.filename or "deck", content)
-        except UnsupportedDeckFormat as exc:
-            raise HTTPException(415, str(exc))
-        except EmptyDeckError as exc:
-            raise HTTPException(400, str(exc))
+    content = await file.read()
+    if not content:
+        raise HTTPException(400, "Deck file is empty.")
+    try:
+        deck_text = load_deck(file.filename or "deck", content)
+    except UnsupportedDeckFormat as exc:
+        raise HTTPException(415, str(exc))
+    except EmptyDeckError as exc:
+        raise HTTPException(400, str(exc))
 
     try:
         job = await submit_screening(form, deck_text=deck_text)

@@ -2,9 +2,13 @@
 Orchestrator for the Originn Level 1 screener.
 
 Public surface:
-  screen_sync(form, deck_text=None)        — inline run, returns ScreeningResult
-  submit_screening(form, deck_text=None)   — queues a ScreeningJob, returns it
-  start_workers(app=None)                  — spawn background workers
+  screen_sync(form, deck_text)         — inline run, returns ScreeningResult
+  submit_screening(form, deck_text)    — queues a ScreeningJob, returns it
+  start_workers(app=None)              — spawn background workers
+
+The pitch deck is REQUIRED — the Originn portal does not accept a form-only
+Level 1 submission. Callers must extract deck text via deck_loader.load_deck
+before invoking.
 
 Level 1 is light enough that the queue is mostly a uniformity convenience —
 the actual run is two LLM calls and some graph math. We still queue so the
@@ -48,7 +52,7 @@ class QueueFullError(Exception):
 # Worker queue
 # ─────────────────────────────────────────────
 
-_queue: asyncio.Queue[tuple[ScreeningJob, Level1Form, str | None]] = asyncio.Queue(
+_queue: asyncio.Queue[tuple[ScreeningJob, Level1Form, str]] = asyncio.Queue(
     maxsize=config.MAX_QUEUE_DEPTH
 )
 _workers_started = False
@@ -57,7 +61,7 @@ _workers_started = False
 async def _process(
     job: ScreeningJob,
     form: Level1Form,
-    deck_text: str | None,
+    deck_text: str,
 ) -> None:
     try:
         update_job_status(job.job_id, JobStatus.EXTRACTING)
@@ -72,7 +76,7 @@ async def _process(
         result = ScreeningResult(
             id=str(uuid.uuid4()),
             created_at=datetime.utcnow(),
-            deck_attached=deck_text is not None,
+            deck_attached=True,
             startup_name=form.startup_name,
             composite_score=agent_result.composite_score,
             triage=TriageOutcome(agent_result.triage),
@@ -119,14 +123,19 @@ def start_workers(app=None) -> None:
 
 async def submit_screening(
     form: Level1Form,
-    deck_text: str | None = None,
+    deck_text: str,
 ) -> ScreeningJob:
-    """Queue a screening; returns immediately with a ScreeningJob."""
+    """Queue a screening; returns immediately with a ScreeningJob.
+
+    `deck_text` is required (use deck_loader.load_deck on the upload).
+    """
+    if not deck_text or not deck_text.strip():
+        raise ValueError("deck_text is required and must not be empty")
     job = ScreeningJob(
         job_id=str(uuid.uuid4()),
         submitted_at=datetime.utcnow(),
         status=JobStatus.QUEUED,
-        deck_attached=deck_text is not None,
+        deck_attached=True,
     )
     save_job(job, form_json=form.model_dump_json(), deck_text=deck_text)
     try:
@@ -142,14 +151,19 @@ async def submit_screening(
 
 async def screen_sync(
     form: Level1Form,
-    deck_text: str | None = None,
+    deck_text: str,
 ) -> ScreeningResult:
-    """Inline runner — for tests, scripts, or one-shot synchronous use."""
+    """Inline runner — for tests, scripts, or one-shot synchronous use.
+
+    `deck_text` is required.
+    """
+    if not deck_text or not deck_text.strip():
+        raise ValueError("deck_text is required and must not be empty")
     job = ScreeningJob(
         job_id=str(uuid.uuid4()),
         submitted_at=datetime.utcnow(),
         status=JobStatus.QUEUED,
-        deck_attached=deck_text is not None,
+        deck_attached=True,
     )
     save_job(job, form_json=form.model_dump_json(), deck_text=deck_text)
     await _process(job, form, deck_text)

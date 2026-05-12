@@ -251,8 +251,50 @@ def test_screen_sync_e2e():
                          credential_one_line="IISc CSA PhD"),
         ],
     )
-    result = asyncio.run(screen_sync(form, deck_text=None))
+    # Deck is required — inline snippet stands in for an uploaded file.
+    deck_text = """
+    === Slide 1 — Problem ===
+    Enterprise sales reps practise negotiation via static PDFs and one-shot
+    workshops. None of it adapts to how a specific rep actually argues.
+
+    === Slide 2 — Solution ===
+    A voice-AI counterparty that runs live roleplays and gives per-call
+    coaching. Mechanism: real-time speech LLM with per-rep policy adaptation.
+
+    === Slide 3 — Why Now ===
+    Voice LLMs crossed real-time conversational quality in 2024.
+
+    === Slide 4 — Team ===
+    Aarav Mehta (CEO, IIT Bombay Speech Lab alum).
+    Priya Iyer (Head of Speech, IISc CSA PhD in conversational speech).
+
+    === Slide 5 — Traction ===
+    3 paid pilots with mid-market enterprise sales orgs.
+    """.strip()
+    result = asyncio.run(screen_sync(form, deck_text=deck_text))
     assert result.composite_score > 0
     assert result.triage in TriageOutcome
     assert len(result.dimension_scores) == 5
     assert result.narrative.technical_remark
+    assert result.deck_attached is True
+
+
+def test_screen_sync_rejects_missing_deck():
+    """Calling screen_sync without a deck must raise ValueError."""
+    import asyncio
+    from originn_level1 import screen_sync
+
+    form = Level1Form(
+        startup_name="VoxArena",
+        industry_vertical="DeepTech & AI",
+        institute_or_incubator="IIT Bombay",
+        what_are_you_building="Voice-AI negotiation training.",
+        stage=FormStage.IDEA,
+        why_solve_this="Voice LLMs are finally good enough.",
+        founders=[
+            FounderInput(name="Aarav Mehta", role="CEO",
+                         credential_one_line="IIT Bombay Speech Lab alum"),
+        ],
+    )
+    with pytest.raises(ValueError, match="deck_text is required"):
+        asyncio.run(screen_sync(form, deck_text=""))
